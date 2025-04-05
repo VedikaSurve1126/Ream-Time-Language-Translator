@@ -1,45 +1,41 @@
-// src/pages/Login.jsx
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, Container, Paper, InputAdornment, IconButton, Alert } from "@mui/material";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import bg from '../assets/bg.jpg';
+import React, { useState } from 'react';
+import { Box, TextField, Button, Typography, Paper, Container, Alert } from '@mui/material';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError('');
     setLoading(true);
-    
+
     try {
-      const response = await fetch("http://localhost:5000/api/login", {
-        method: "POST",
+      const response = await fetch('http://localhost:5000/api/login', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+        throw new Error(data.message || 'Failed to login');
       }
+
+      // Call the login function from auth context
+      login(data.token, data.user);
       
-      // Save token and user info to localStorage
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      
-      // Redirect to home page
-      navigate("/");
+      // navigate is not needed here as it's handled in the login function
+      // navigate('/');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -48,138 +44,51 @@ const Login = () => {
   };
 
   return (
-    <Container 
-      maxWidth={false} 
-      sx={{ 
-        minHeight: "calc(100vh - 64px)",
-        padding: 0,
-        backgroundImage: `url(${bg})`, 
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center"
-      }}
-    >
-      <Paper 
-        elevation={10} 
-        sx={{ 
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          backdropFilter: "blur(5px)",
-          padding: 4,
-          borderRadius: 2,
-          maxWidth: 400,
-          width: "100%",
-          color: "white"
-        }}
-      >
-        <Typography variant="h4" component="h1" align="center" sx={{ mb: 4, fontWeight: "bold" }}>
+    <Container maxWidth="sm">
+      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
+        <Typography variant="h4" align="center" gutterBottom>
           Login
         </Typography>
         
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+        <Box component="form" onSubmit={handleSubmit}>
           <TextField
-            margin="normal"
-            required
+            label="Email"
+            type="email"
             fullWidth
-            id="email"
-            label="Your Email"
-            name="email"
-            autoComplete="email"
-            autoFocus
+            margin="normal"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            InputProps={{
-              endAdornment: <InputAdornment position="end"><Box component="span" sx={{ color: "white" }}>👤</Box></InputAdornment>,
-            }}
-            sx={{
-              mb: 2,
-              "& .MuiOutlinedInput-root": {
-                color: "white",
-                "& fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-                "&:hover fieldset": { borderColor: "white" },
-              },
-              "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" }
-            }}
+            required
           />
           
           <TextField
-            margin="normal"
-            required
+            label="Password"
+            type="password"
             fullWidth
-            name="password"
-            label="Your Password"
-            type={showPassword ? "text" : "password"}
-            id="password"
-            autoComplete="current-password"
+            margin="normal"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => setShowPassword(!showPassword)}
-                    edge="end"
-                    sx={{ color: "white" }}
-                  >
-                    {showPassword ? <VisibilityIcon /> : <VisibilityOffIcon />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              mb: 2,
-              "& .MuiOutlinedInput-root": {
-                color: "white",
-                "& fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-                "&:hover fieldset": { borderColor: "white" },
-              },
-              "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" }
-            }}
+            required
           />
           
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-            <FormControlLabel
-              control={<Checkbox sx={{ color: "rgba(255, 255, 255, 0.7)", "&.Mui-checked": { color: "white" } }} />}
-              label="Remember Me"
-              sx={{ color: "rgba(255, 255, 255, 0.9)" }}
-            />
-            <Link to="/forgot-password" style={{ color: "#6EABF2", textDecoration: "none" }}>
-              Forgot Password?
-            </Link>
-          </Box>
-          
-          <Button
+          <Button 
             type="submit"
-            fullWidth
             variant="contained"
+            color="primary"
+            fullWidth
+            sx={{ mt: 3 }}
             disabled={loading}
-            sx={{
-              mt: 2,
-              mb: 3,
-              py: 1.5,
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              color: "rgba(0, 0, 0, 0.8)",
-              "&:hover": {
-                backgroundColor: "white",
-              }
-            }}
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading ? 'Logging in...' : 'Login'}
           </Button>
           
-          <Typography align="center" sx={{ mt: 2 }}>
-            New Here?{" "}
-            <Link to="/SignUp" style={{ color: "#6EABF2", textDecoration: "none" }}>
-              Create an Account
-            </Link>
-          </Typography>
+          <Box mt={2} textAlign="center">
+            <Typography variant="body2">
+              Don't have an account? <Link to="/signup">Sign up</Link>
+            </Typography>
+          </Box>
         </Box>
       </Paper>
     </Container>

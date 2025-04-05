@@ -1,44 +1,37 @@
-// src/components/Navbar.jsx
 import { useState, useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Button, Menu, MenuItem, IconButton, Avatar } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PersonIcon from '@mui/icons-material/Person';
+import { useAuth } from '../context/AuthContext'; // Import useAuth hook
 
 function Navbar() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth(); // Use the auth context
   const [anchorEl, setAnchorEl] = useState(null);
-  const [user, setUser] = useState(null);
-  const open = Boolean(anchorEl);
+  const [moreMenuAnchorEl, setMoreMenuAnchorEl] = useState(null);
+  const userMenuOpen = Boolean(anchorEl);
+  const moreMenuOpen = Boolean(moreMenuAnchorEl);
 
-  // Check if user is logged in on component mount
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-      }
-    }
-  }, []);
-
-  const handleClick = (event) => {
+  const handleUserMenuClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const handleClose = () => {
+  const handleMoreMenuClick = (event) => {
+    setMoreMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleMoreMenuClose = () => {
+    setMoreMenuAnchorEl(null);
   };
 
   const handleLogout = () => {
     setAnchorEl(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    setUser(null);
-    navigate('/');
+    logout(); // Use the logout function from AuthContext
   };
 
   return (
@@ -68,13 +61,27 @@ function Navbar() {
                 alignItems: 'center',
                 gap: 1
               }}
-              onClick={handleClick}
+              onClick={handleUserMenuClick}
+              aria-controls="user-menu"
+              aria-haspopup="true"
             >
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
                 {user.username ? user.username[0].toUpperCase() : <PersonIcon />}
               </Avatar>
               {user.username}
             </Button>
+            <Menu
+              id="user-menu"
+              anchorEl={anchorEl}
+              open={userMenuOpen}
+              onClose={handleUserMenuClose}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={handleUserMenuClose} component={Link} to="/Profile">Profile</MenuItem>
+              <MenuItem onClick={handleUserMenuClose} component={Link} to="/History">History</MenuItem>
+              <MenuItem onClick={handleLogout}>Logout</MenuItem>
+            </Menu>
           </>
         ) : (
           // User is not logged in
@@ -89,31 +96,36 @@ function Navbar() {
           aria-label="more options" 
           aria-controls="menu-options" 
           aria-haspopup="true" 
-          onClick={handleClick}
+          onClick={handleMoreMenuClick}
+          sx={{ ml: 1 }}
         >
           <MoreVertIcon />
         </IconButton>
 
         <Menu
           id="menu-options" 
-          anchorEl={anchorEl} 
-          open={open} 
-          onClose={handleClose} 
+          anchorEl={moreMenuAnchorEl} 
+          open={moreMenuOpen} 
+          onClose={handleMoreMenuClose} 
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
           {user ? (
             // Menu items for logged-in users
             <>
-              <MenuItem onClick={handleClose} component={Link} to="/History">History</MenuItem>
-              <MenuItem onClick={handleClose} component={Link} to="/Languages">Languages</MenuItem>
-              <MenuItem onClick={handleClose} component={Link} to="/Profile">Profile</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/text-input">Text Input</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/audio-input">Audio Input</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/Languages">Languages</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/History">History</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/Profile">Profile</MenuItem>
               <MenuItem onClick={handleLogout}>Logout</MenuItem>
             </>
           ) : (
             // Menu items for guests
             <>
-              <MenuItem onClick={handleClose} component={Link} to="/Languages">Languages</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/text-input">Text Input</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/audio-input">Audio Input</MenuItem>
+              <MenuItem onClick={handleMoreMenuClose} component={Link} to="/Languages">Languages</MenuItem>
             </>
           )}
         </Menu>

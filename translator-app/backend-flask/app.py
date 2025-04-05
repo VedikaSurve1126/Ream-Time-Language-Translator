@@ -1,23 +1,28 @@
 from flask import Flask, request, jsonify, send_file, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
-import datetime
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import tempfile
 import uuid
 from pydub import AudioSegment
-#import io
-#import torch
 import whisper
 from gtts import gTTS  # Google Text-to-Speech
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+
+# Configure secret key
+app.config['SECRET_KEY'] = '186020041199'  
+
+# Configure CORS properly
+CORS(app, origins=["http://localhost:5173"], 
+     supports_credentials=True, 
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:WillH1860@localhost/translator_app'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -84,41 +89,10 @@ def load_whisper_model():
         whisper_model = whisper.load_model("medium")
     return whisper_model
 
+# Simple test route
 @app.route('/api/test', methods=['GET'])
 def test_connection():
     return jsonify({'status': 'success', 'message': 'Connection to backend established'}), 200
-
-@app.route('/api/translate-text', methods=['POST'])
-def translate_text():
-    data = request.get_json()
-    text = data.get('text')
-    source_lang = data.get('sourceLang', 'eng_Latn')
-    target_lang = data.get('targetLang', 'spa_Latn')
-
-    if len(text.split()) == 1 and text.lower() in ['hello', 'hi']:
-        text = f"{text}, how are you?"
-
-    try:
-        payload = {
-            "inputs": text,
-            "parameters": {"src_lang": source_lang, "tgt_lang": target_lang},
-            "options": {"wait_for_model": True}
-        }
-        response = requests.post(API_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        if isinstance(result, list) and len(result) > 0:
-            translated_text = result[0].get('translation_text', '')
-            if len(text.split()) == 1 and text.lower() in ['hello', 'hi']:
-                translated_text = translated_text.split(',')[0]
-            translation = Translation(user_id=None, input_text=text, translated_text=translated_text, source_lang=source_lang, target_lang=target_lang)
-            db.session.add(translation)
-            db.session.commit()
-            return jsonify({'translatedText': translated_text})
-        return jsonify({'error': 'Unexpected response format from API'}), 500
-    except Exception as e:
-        print("Error:", str(e))
-        return jsonify({'error': 'Text translation failed', 'details': str(e)}), 500
 
 @app.route('/api/audio-to-audio', methods=['POST'])
 def audio_to_audio():
@@ -277,71 +251,53 @@ def cleanup_audio_files():
         del app.config[key]
     return jsonify({'message': f'Cleaned up {count} audio files'})
 
-@app.route('/api/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-    
-    # Validate input
-    if not username or not email or not password:
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    # Check if user already exists
-    existing_user = User.query.filter_by(email=email).first()
-    if existing_user:
-        return jsonify({'error': 'Email already registered'}), 409
-    
-    # Create new user
-    hashed_password = generate_password_hash(password, method='sha256')
-    new_user = User(
-        username=username,
-        email=email,
-        password_hash=hashed_password
-    )
-    
-    try:
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({'message': 'User registered successfully'}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': 'Registration failed', 'details': str(e)}), 500
-
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-    
-    # Validate input
-    if not email or not password:
-        return jsonify({'error': 'Missing email or password'}), 400
-    
-    # Find user
-    user = User.query.filter_by(email=email).first()
-    
-    # Check if user exists and password is correct
-    if not user or not check_password_hash(user.password_hash, password):
-        return jsonify({'error': 'Invalid email or password'}), 401
-    
-    # Generate token
-    token = jwt.encode({
-        'user_id': user.id,
-        'username': user.username,
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
-    }, app.config.get('SECRET_KEY', 'your-secret-key'), algorithm='HS256')
-    
-    return jsonify({
-        'message': 'Login successful',
-        'token': token,
-        'user': {
-            'id': user.id,
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'success'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data received'}), 400
+            
+        email = data.get('email')
+        password = data.get('password')
+        
+        # Validate input
+        if not email or not password:
+            return jsonify({'error': 'Missing email or password'}), 400
+        
+        # Find user
+        user = User.query.filter_by(email=email).first()
+        
+        # Check if user exists and password is correct
+        if not user or not check_password_hash(user.password_hash, password):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Generate token
+        token = jwt.encode({
+            'user_id': user.id,
             'username': user.username,
-            'email': user.email
-        }
-    }), 200
+            'exp': datetime.utcnow() + timedelta(days=1)
+        }, app.config['SECRET_KEY'], algorithm='HS256')
+        
+        return jsonify({
+            'message': 'Login successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            }
+        }), 200
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({'error': 'Login failed', 'details': str(e)}), 500
 
 @app.route('/api/user', methods=['GET'])
 def get_user():
@@ -371,9 +327,6 @@ def get_user():
         return jsonify({'error': 'Token expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Invalid token'}), 401
-    
-    # Add a secret key to your Flask app configuration
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
 
 # Add a token required decorator for protected routes
 def token_required(f):
@@ -408,6 +361,149 @@ def get_profile(current_user):
         'preferred_input_lang': current_user.preferred_input_lang,
         'preferred_output_lang': current_user.preferred_output_lang
     })
+
+@app.route('/api/translations', methods=['GET'])
+@token_required
+def get_user_translations(current_user):
+    try:
+        # Get user translations from database
+        translations = Translation.query.filter_by(user_id=current_user.id).order_by(Translation.timestamp.desc()).all()
+        
+        # Convert to JSON serializable format
+        translations_list = []
+        for translation in translations:
+            translations_list.append({
+                'id': translation.id,
+                'input_text': translation.input_text,
+                'translated_text': translation.translated_text,
+                'source_lang': translation.source_lang,
+                'target_lang': translation.target_lang,
+                'timestamp': translation.timestamp.isoformat(),
+                'is_audio': translation.is_audio
+            })
+        
+        return jsonify(translations_list), 200
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch translations', 'details': str(e)}), 500
+
+@app.route('/api/translate-text', methods=['POST'])
+def translate_text():
+    data = request.get_json()
+    text = data.get('text')
+    source_lang = data.get('sourceLang', 'eng_Latn')
+    target_lang = data.get('targetLang', 'spa_Latn')
+    
+    # Get user_id from token if available
+    user_id = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        try:
+            token = auth_header.split(' ')[1] if len(auth_header.split(' ')) > 1 else auth_header
+            data = jwt.decode(token, app.config.get('SECRET_KEY', 'your-secret-key'), algorithms=['HS256'])
+            user_id = data.get('user_id')
+        except:
+            # If token is invalid, continue without user_id
+            pass
+
+    if len(text.split()) == 1 and text.lower() in ['hello', 'hi']:
+        text = f"{text}, how are you?"
+
+    try:
+        payload = {
+            "inputs": text,
+            "parameters": {"src_lang": source_lang, "tgt_lang": target_lang},
+            "options": {"wait_for_model": True}
+        }
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        if isinstance(result, list) and len(result) > 0:
+            translated_text = result[0].get('translation_text', '')
+            if len(text.split()) == 1 and text.lower() in ['hello', 'hi']:
+                translated_text = translated_text.split(',')[0]
+            
+            # Save with user_id if available
+            translation = Translation(
+                user_id=user_id,
+                input_text=text,
+                translated_text=translated_text,
+                source_lang=source_lang,
+                target_lang=target_lang
+            )
+            db.session.add(translation)
+            db.session.commit()
+            
+            return jsonify({'translatedText': translated_text})
+        return jsonify({'error': 'Unexpected response format from API'}), 500
+    except Exception as e:
+        print("Error:", str(e))
+        return jsonify({'error': 'Text translation failed', 'details': str(e)}), 500
+
+@app.route('/api/register', methods=['POST', 'OPTIONS'])
+def register():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'success'})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        #response.headers.add('Access-Control-Allow-Credentials', 'true')  # Add this line
+        return response
+        
+    try:
+        # Get request data and print for debugging
+        data = request.get_json()
+        if not data:
+            return jsonify({'error':'No Json data recieved'}), 400
+        
+        print('Registration request data',data)
+
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        
+        # Validate input
+        if not username or not email or not password:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Check if user already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({'error': 'Email already registered'}), 409
+        
+        # Create new user
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(
+            username=username,
+            email=email,
+            password_hash=hashed_password
+        )
+        
+        # Add and commit with error handling
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+        except Exception as db_error:
+            db.session.rollback()
+            print(f"Database error: {str(db_error)}")
+            return jsonify({'error': 'Database error', 'details': str(db_error)}), 500
+        
+        return jsonify({'message': 'User registered successfully'}), 201
+        
+        # Add CORS headers to response
+        #response = jsonify({'message': 'User registered successfully'})
+        #response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
+        #response.headers.add('Access-Control-Allow-Credentials', 'true')  # Add this line
+        #return response, 201
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Registration error: {str(e)}")
+        # Add CORS headers even to error responses
+        #response = jsonify({'error': 'Registration failed', 'details': str(e)})
+        #response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
+        #response.headers.add('Access-Control-Allow-Credentials', 'true')  # Add this line
+        return jsonify({'error': 'Registration failed', 'details': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
