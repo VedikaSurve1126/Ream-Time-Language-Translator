@@ -1,43 +1,121 @@
 // src/components/Navbar.jsx
-import { AppBar, Toolbar, Typography, Button, Menu, MenuItem, IconButton } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { AppBar, Toolbar, Typography, Button, Menu, MenuItem, IconButton, Avatar } from '@mui/material';
+import { Link, useNavigate } from 'react-router-dom';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import {useState} from 'react';
+import PersonIcon from '@mui/icons-material/Person';
 
 function Navbar() {
-  const [anchorE1, setanchorE1]=useState(null);
-  const open=Boolean(anchorE1);
+  const navigate = useNavigate();
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [user, setUser] = useState(null);
+  const open = Boolean(anchorEl);
+
+  // Check if user is logged in on component mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
+    }
+  }, []);
 
   const handleClick = (event) => {
-    setanchorE1(event.currentTarget);
+    setAnchorEl(event.currentTarget);
   };
 
-  const handleClose = () =>{
-    setanchorE1(null);
-  }
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    setAnchorEl(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/');
+  };
+
   return (
     <AppBar position="static" color="primary">
       <Toolbar>
-        <Typography variant="h6" component={Link} to="/" sx={{ flexGrow: 1, textDecoration: 'none', color:'inherit', '&:hover':{cursor:'pointer'}}}>
-          Conclave
+        <Typography 
+          variant="h6" 
+          component={Link} 
+          to="/" 
+          sx={{ 
+            flexGrow: 1, 
+            textDecoration: 'none', 
+            color: 'inherit', 
+            '&:hover': { cursor: 'pointer' }
+          }}
+        >
+          RealTimeLang+
         </Typography>
-        <Button color="inherit" component={Link} to="/Login">Login</Button>
-        <Button color="inherit" component={Link} to="/SignUp">Sign Up</Button>
+
+        {user ? (
+          // User is logged in
+          <>
+            <Button 
+              color="inherit" 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 1
+              }}
+              onClick={handleClick}
+            >
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                {user.username ? user.username[0].toUpperCase() : <PersonIcon />}
+              </Avatar>
+              {user.username}
+            </Button>
+          </>
+        ) : (
+          // User is not logged in
+          <>
+            <Button color="inherit" component={Link} to="/Login">Login</Button>
+            <Button color="inherit" component={Link} to="/SignUp">Sign Up</Button>
+          </>
+        )}
 
         <IconButton 
-        color="inherit" aria-label="more options" aria-controls="menu-options" aria-haspopups="true" onClick={handleClick}>
+          color="inherit" 
+          aria-label="more options" 
+          aria-controls="menu-options" 
+          aria-haspopup="true" 
+          onClick={handleClick}
+        >
           <MoreVertIcon />
         </IconButton>
 
         <Menu
-        id="menu-options" anchorE1={anchorE1} open={open} onClose={handleClose} 
-        anchorOrigin={{vertical:'bottom', horizontal:'right'}}
-        transformOrigin={{vertical:'top', horizontal:'right'}}
-        sx={{mt:-43}}>
-          <MenuItem onClick={handleClose} component={Link} to="/History" >History</MenuItem>
-          <MenuItem onClick={handleClose} component={Link} to="/Languages" >Languages</MenuItem>
-          <MenuItem onClick={handleClose} component={Link} to="/Profile" >Profile</MenuItem>
-          <MenuItem onClick={handleClose} component={Link} to="/Logout" >LogOut</MenuItem>
+          id="menu-options" 
+          anchorEl={anchorEl} 
+          open={open} 
+          onClose={handleClose} 
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          {user ? (
+            // Menu items for logged-in users
+            <>
+              <MenuItem onClick={handleClose} component={Link} to="/History">History</MenuItem>
+              <MenuItem onClick={handleClose} component={Link} to="/Languages">Languages</MenuItem>
+              <MenuItem onClick={handleClose} component={Link} to="/Profile">Profile</MenuItem>
+              <MenuItem onClick={handleLogout}>Logout</MenuItem>
+            </>
+          ) : (
+            // Menu items for guests
+            <>
+              <MenuItem onClick={handleClose} component={Link} to="/Languages">Languages</MenuItem>
+            </>
+          )}
         </Menu>
       </Toolbar>
     </AppBar>

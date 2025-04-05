@@ -1,20 +1,50 @@
 // src/pages/Login.jsx
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, Container, Paper, InputAdornment, IconButton } from "@mui/material";
+import { Link, useNavigate } from "react-router-dom";
+import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, Container, Paper, InputAdornment, IconButton, Alert } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import bg from '../assets/bg.jpg'
+import bg from '../assets/bg.jpg';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add your login logic here
-    console.log("Login attempt with:", { email, password });
+    setError("");
+    setLoading(true);
+    
+    try {
+      const response = await fetch("http://localhost:5000/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+      
+      // Save token and user info to localStorage
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      
+      // Redirect to home page
+      navigate("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,6 +76,12 @@ const Login = () => {
         <Typography variant="h4" component="h1" align="center" sx={{ mb: 4, fontWeight: "bold" }}>
           Login
         </Typography>
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
           <TextField
@@ -123,6 +159,7 @@ const Login = () => {
             type="submit"
             fullWidth
             variant="contained"
+            disabled={loading}
             sx={{
               mt: 2,
               mb: 3,
@@ -134,7 +171,7 @@ const Login = () => {
               }
             }}
           >
-            Login
+            {loading ? "Logging in..." : "Login"}
           </Button>
           
           <Typography align="center" sx={{ mt: 2 }}>
